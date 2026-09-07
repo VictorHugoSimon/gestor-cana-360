@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles.css';
 import './economics.css';
+import './operations.css';
 import { App } from './App';
 import { EconomicsConsole } from './EconomicsConsole';
 
