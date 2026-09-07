@@ -1,15 +1,37 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "gestor-cana-360-api",
+  "name": "gestor-cana-360",
   "main": "src/index.ts",
-  "compatibility_date": "2026-09-01",
+  "compatibility_date": "2026-09-07",
   "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "../web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/health"]
+  },
   "vars": {
-    "APP_ENV": "development",
-    "CORS_ORIGIN": "http://localhost:5173",
+    "APP_ENV": "production",
+    "CORS_ORIGIN": "https://gestor-cana-360.example",
+    "NEON_AUTH_BASE_URL": "https://ep-dawn-rain-ac4fpv5q.neonauth.sa-east-1.aws.neon.tech/gestor_cana_360/auth",
+    "NEON_AUTH_JWKS_URL": "https://ep-dawn-rain-ac4fpv5q.neonauth.sa-east-1.aws.neon.tech/gestor_cana_360/auth/.well-known/jwks.json",
     "AI_PROVIDER": "cloudflare",
     "AI_MODEL": "@cf/meta/llama-3.2-3b-instruct"
   },
   "ai": { "binding": "AI" },
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "env": {
+    "dev": {
+      "name": "gestor-cana-360-dev",
+      "vars": {
+        "APP_ENV": "development",
+        "CORS_ORIGIN": "*",
+        "NEON_AUTH_BASE_URL": "https://ep-dawn-rain-ac4fpv5q.neonauth.sa-east-1.aws.neon.tech/gestor_cana_360/auth",
+        "NEON_AUTH_JWKS_URL": "https://ep-dawn-rain-ac4fpv5q.neonauth.sa-east-1.aws.neon.tech/gestor_cana_360/auth/.well-known/jwks.json",
+        "AI_PROVIDER": "cloudflare",
+        "AI_MODEL": "@cf/meta/llama-3.2-3b-instruct"
+      },
+      "ai": { "binding": "AI" }
+    }
+  }
 }
