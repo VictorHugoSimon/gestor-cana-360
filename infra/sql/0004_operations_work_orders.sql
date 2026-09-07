@@ -21,16 +21,6 @@ BEGIN
   END IF;
 END $$;
 
-CREATE SEQUENCE IF NOT EXISTS work_order_number_seq;
-SELECT setval(
-  'work_order_number_seq',
-  GREATEST(
-    COALESCE((SELECT MAX(number) + 1 FROM work_orders), 1),
-    (SELECT last_value FROM work_order_number_seq)
-  ),
-  false
-);
-ALTER TABLE work_orders ALTER COLUMN number SET DEFAULT nextval('work_order_number_seq');
 CREATE UNIQUE INDEX IF NOT EXISTS work_orders_number_uidx ON work_orders(number);
 CREATE INDEX IF NOT EXISTS work_orders_org_season_schedule_idx
   ON work_orders(organization_id, season_id, scheduled_for);
