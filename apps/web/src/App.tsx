@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { authClient, getApiToken } from './auth';
 import { GeoFieldMap } from './GeoFieldMap';
+import { OperationsPanel } from './OperationsPanel';
 
 type Farm = {
   id: string;
@@ -229,41 +230,52 @@ export function App() {
         </header>
         <div className="content">
           {error && <div className="errorBanner">{error}</div>}
-          <section className="kpis">
-            <Kpi label="ÁREA MAPEADA" value={`${Number(summary?.mapped_area_ha ?? totalMappedArea).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ha`} note={`${fields.length} talhões ativos`} />
-            <Kpi label="PRODUÇÃO REGISTRADA" value={`${Number(summary?.produced_tons ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })} t`} note={selectedSeason?.name ?? 'sem safra'} />
-            <Kpi label="CUSTOS REGISTRADOS" value={`R$ ${Number(summary?.total_cost ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`} note="custos lançados na safra" />
-            <Kpi label="ALERTAS / OS" value={`${Number(summary?.open_alerts ?? 0)}`} note="em andamento ou atrasadas" warn={Number(summary?.open_alerts ?? 0) > 0} />
-          </section>
+          {active === 'Operações / OS' ? (
+            <OperationsPanel
+              farmId={selectedFarmId}
+              seasonId={selectedSeasonId}
+              fields={fields}
+              role={workspace?.role ?? 'viewer'}
+            />
+          ) : (
+            <>
+              <section className="kpis">
+                <Kpi label="ÁREA MAPEADA" value={`${Number(summary?.mapped_area_ha ?? totalMappedArea).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ha`} note={`${fields.length} talhões ativos`} />
+                <Kpi label="PRODUÇÃO REGISTRADA" value={`${Number(summary?.produced_tons ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })} t`} note={selectedSeason?.name ?? 'sem safra'} />
+                <Kpi label="CUSTOS REGISTRADOS" value={`R$ ${Number(summary?.total_cost ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`} note="custos lançados na safra" />
+                <Kpi label="ALERTAS / OS" value={`${Number(summary?.open_alerts ?? 0)}`} note="em andamento ou atrasadas" warn={Number(summary?.open_alerts ?? 0) > 0} />
+              </section>
 
-          <section className="grid2">
-            <div className="panel mapPanel">
-              <div className="panelTitle"><span>MAPA DA PROPRIEDADE</span><small>MapLibre + Terra Draw + PostGIS</small></div>
-              <GeoFieldMap
-                fields={fields}
-                farmId={selectedFarmId}
-                selectedFieldId={selectedFieldId}
-                onSelect={setSelectedFieldId}
-                onChanged={loadWorkspace}
-              />
-            </div>
-            <div className="panel details">
-              <div className="panelTitle"><span>PRONTUÁRIO DO TALHÃO</span><small>{selectedField?.code ?? '—'}</small></div>
-              <h2>{selectedField?.code ?? 'Sem talhão'}</h2>
-              <p className="muted">{selectedField ? `${selectedField.variety ?? 'Variedade não informada'} · ${Number(selectedField.area_ha ?? 0).toLocaleString('pt-BR')} ha` : 'Cadastre ou desenhe o primeiro talhão.'}</p>
-              <div className="detailGrid"><Metric label="VARIEDADE" value={selectedField?.variety ?? '—'} /><Metric label="CICLO" value={selectedField?.cycle ?? '—'} /><Metric label="ÁREA" value={selectedField ? `${Number(selectedField.area_ha ?? 0).toLocaleString('pt-BR')} ha` : '—'} /><Metric label="STATUS" value={selectedField?.active ? 'ATIVO' : '—'} /></div>
-              <div className="notice">O mapa já permite desenhar, editar e importar polígonos. A área exibida após salvar é calculada no PostGIS, não pelo navegador.</div>
-            </div>
-          </section>
+              <section className="grid2">
+                <div className="panel mapPanel">
+                  <div className="panelTitle"><span>MAPA DA PROPRIEDADE</span><small>MapLibre + Terra Draw + PostGIS</small></div>
+                  <GeoFieldMap
+                    fields={fields}
+                    farmId={selectedFarmId}
+                    selectedFieldId={selectedFieldId}
+                    onSelect={setSelectedFieldId}
+                    onChanged={loadWorkspace}
+                  />
+                </div>
+                <div className="panel details">
+                  <div className="panelTitle"><span>PRONTUÁRIO DO TALHÃO</span><small>{selectedField?.code ?? '—'}</small></div>
+                  <h2>{selectedField?.code ?? 'Sem talhão'}</h2>
+                  <p className="muted">{selectedField ? `${selectedField.variety ?? 'Variedade não informada'} · ${Number(selectedField.area_ha ?? 0).toLocaleString('pt-BR')} ha` : 'Cadastre ou desenhe o primeiro talhão.'}</p>
+                  <div className="detailGrid"><Metric label="VARIEDADE" value={selectedField?.variety ?? '—'} /><Metric label="CICLO" value={selectedField?.cycle ?? '—'} /><Metric label="ÁREA" value={selectedField ? `${Number(selectedField.area_ha ?? 0).toLocaleString('pt-BR')} ha` : '—'} /><Metric label="STATUS" value={selectedField?.active ? 'ATIVO' : '—'} /></div>
+                  <div className="notice">O mapa já permite desenhar, editar e importar polígonos. A área exibida após salvar é calculada no PostGIS, não pelo navegador.</div>
+                </div>
+              </section>
 
-          <section className="panel tablePanel">
-            <div className="panelTitle"><span>TALHÕES DA FAZENDA</span><small>banco real</small></div>
-            <div className="table">
-              <div className="tr head"><span>TALHÃO</span><span>VARIEDADE</span><span>HA</span><span>CICLO</span><span>GEO</span><span>STATUS</span></div>
-              {fields.map((field) => <button key={field.id} className={`tr ${field.id === selectedFieldId ? 'selectedRow' : ''}`} onClick={() => setSelectedFieldId(field.id)}><strong>{field.code}</strong><span>{field.variety ?? '—'}</span><span>{Number(field.area_ha ?? 0).toLocaleString('pt-BR')}</span><span>{field.cycle ?? '—'}</span><span>{field.geometry ? 'Sim' : 'Não'}</span><span className={field.geometry ? 'ok' : 'attention'}>{field.geometry ? 'Mapeado' : 'Sem polígono'}</span></button>)}
-              {!fields.length && <div className="emptyState">Nenhum talhão cadastrado para esta fazenda.</div>}
-            </div>
-          </section>
+              <section className="panel tablePanel">
+                <div className="panelTitle"><span>TALHÕES DA FAZENDA</span><small>banco real</small></div>
+                <div className="table">
+                  <div className="tr head"><span>TALHÃO</span><span>VARIEDADE</span><span>HA</span><span>CICLO</span><span>GEO</span><span>STATUS</span></div>
+                  {fields.map((field) => <button key={field.id} className={`tr ${field.id === selectedFieldId ? 'selectedRow' : ''}`} onClick={() => setSelectedFieldId(field.id)}><strong>{field.code}</strong><span>{field.variety ?? '—'}</span><span>{Number(field.area_ha ?? 0).toLocaleString('pt-BR')}</span><span>{field.cycle ?? '—'}</span><span>{field.geometry ? 'Sim' : 'Não'}</span><span className={field.geometry ? 'ok' : 'attention'}>{field.geometry ? 'Mapeado' : 'Sem polígono'}</span></button>)}
+                  {!fields.length && <div className="emptyState">Nenhum talhão cadastrado para esta fazenda.</div>}
+                </div>
+              </section>
+            </>
+          )}
         </div>
       </main>
     </div>
