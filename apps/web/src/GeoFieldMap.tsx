@@ -213,7 +213,8 @@ export function GeoFieldMap({ fields, farmId, selectedFieldId, onSelect, onChang
   function clearEditor() {
     const draw = drawRef.current;
     if (draw) {
-      draw.deselectFeature();
+      if (editingFieldId && draw.hasFeature(editingFieldId)) draw.deselectFeature(editingFieldId);
+      if (draftDrawId !== null && draw.hasFeature(draftDrawId)) draw.deselectFeature(draftDrawId);
       draw.clear();
       draw.setMode('select');
     }
