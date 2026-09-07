@@ -1,19 +1,27 @@
-name: Deploy API
+name: Deploy Production (Manual)
+
 on:
-  push:
-    branches: [main]
-    paths: ['apps/api/**', 'packages/**', 'pnpm-lock.yaml', 'package.json', 'pnpm-workspace.yaml']
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Digite DEPLOY_PRODUCTION somente após DEV homologado'
+        required: true
+        type: string
+
 jobs:
-  deploy:
+  production-gate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: pnpm install --frozen-lockfile=false
-      - run: pnpm --filter @gc360/api deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Production deployment gate
+        shell: bash
+        run: |
+          if [[ "${{ inputs.confirmation }}" != "DEPLOY_PRODUCTION" ]]; then
+            echo "Production deployment blocked. DEV must be homologated first."
+            exit 1
+          fi
+          echo "Explicit production confirmation received."
+
+      - name: Production infrastructure status
+        run: |
+          echo "Production deploy remains intentionally incomplete until Neon Auth PROD, production domain/CORS and production database secrets are configured." 
+          exit 1

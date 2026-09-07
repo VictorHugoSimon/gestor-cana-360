@@ -6,7 +6,12 @@
   "scripts": {
     "dev:web": "pnpm --filter @gc360/web dev",
     "dev:api": "pnpm --filter @gc360/api dev",
-    "build": "pnpm -r build",
+    "dev:cloudflare": "pnpm --filter @gc360/api dev:cloudflare",
+    "build:web": "pnpm --filter @gc360/web build",
+    "build:api": "pnpm --filter @gc360/api build",
+    "build": "pnpm build:web && pnpm build:api",
+    "build:dev": "pnpm build:web && pnpm --filter @gc360/api build:dev",
+    "deploy:dev": "pnpm build:web && pnpm --filter @gc360/api deploy:dev",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "check": "pnpm typecheck && pnpm build"
