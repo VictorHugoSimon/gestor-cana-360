@@ -67,22 +67,52 @@ app.get('/api/v1/dashboard/summary', async (c) => {
   return c.json({ data: summary });
 });
 
-const aiInput = z.object({ question: z.string().trim().min(3).max(2000), context: z.record(z.string(), z.unknown()).optional() });
-app.post('/api/v1/ai/ask', async (c) => {
-  const parsed = aiInput.safeParse(await c.req.json());
-  if (!parsed.success) return c.json({ error: 'validation_error' }, 422);
-  const prompt = `Você é o copiloto agronômico do Gestor Cana 360. Responda em português, cite incertezas e nunca invente dados. Pergunta: ${parsed.data.question}\nContexto JSON: ${JSON.stringify(parsed.data.context ?? {})}`;
-  if ((c.env.AI_PROVIDER ?? 'cloudflare') === 'cloudflare' && c.env.AI) {
-    const result = await c.env.AI.run(c.env.AI_MODEL || '@cf/meta/llama-3.2-3b-instruct', { messages: [{ role: 'system', content: 'Assistente agrícola focado em cana-de-açúcar e gestão operacional.' }, { role: 'user', content: prompt }] });
-    return c.json({ provider: 'cloudflare', data: result });
-  }
-  if (c.env.AI_PROVIDER === 'openai' && c.env.OPENAI_API_KEY && c.env.OPENAI_MODEL) {
-    const response = await fetch('https://api.openai.com/v1/responses', { method:'POST', headers:{ 'Authorization':`Bearer ${c.env.OPENAI_API_KEY}`,'Content-Type':'application/json' }, body:JSON.stringify({ model:c.env.OPENAI_MODEL, input:prompt }) });
-    if (!response.ok) return c.json({ error:'ai_provider_error', status:response.status }, 502);
-    return c.json({ provider:'openai', data: await response.json() });
-  }
-  return c.json({ error:'ai_not_configured' }, 503);
+const aiInput = z.object({
+  question: z.string().trim().min(3).max(2000),
+  context: z.record(z.string(), z.unknown()).optional(),
 });
+
+function jsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'content-type': 'application/json; charset=utf-8' },
+  });
+}
+
+async function handleAi(c: any): Promise<Response> {
+  const parsed = aiInput.safeParse(await c.req.json());
+  if (!parsed.success) return jsonResponse({ error: 'validation_error' }, 422);
+
+  const env = c.env as Bindings;
+  const prompt = `Você é o copiloto agronômico do Gestor Cana 360. Responda em português, cite incertezas e nunca invente dados. Pergunta: ${parsed.data.question}\nContexto JSON: ${JSON.stringify(parsed.data.context ?? {})}`;
+
+  if ((env.AI_PROVIDER ?? 'cloudflare') === 'cloudflare' && env.AI) {
+    const result = await env.AI.run(env.AI_MODEL || '@cf/meta/llama-3.2-3b-instruct', {
+      messages: [
+        { role: 'system', content: 'Assistente agrícola focado em cana-de-açúcar e gestão operacional.' },
+        { role: 'user', content: prompt },
+      ],
+    });
+    return jsonResponse({ provider: 'cloudflare', data: result });
+  }
+
+  if (env.AI_PROVIDER === 'openai' && env.OPENAI_API_KEY && env.OPENAI_MODEL) {
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ model: env.OPENAI_MODEL, input: prompt }),
+    });
+    if (!response.ok) return jsonResponse({ error: 'ai_provider_error', status: response.status }, 502);
+    return jsonResponse({ provider: 'openai', data: await response.json() });
+  }
+
+  return jsonResponse({ error: 'ai_not_configured' }, 503);
+}
+
+app.post('/api/v1/ai/ask', handleAi);
 
 app.onError((err, c) => { console.error(err); return c.json({ error: 'internal_error' }, 500); });
 export default app;
