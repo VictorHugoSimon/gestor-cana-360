@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gestor-cana-360-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "APP_ENV": "development",
+    "CORS_ORIGIN": "http://localhost:5173",
+    "AI_PROVIDER": "cloudflare",
+    "AI_MODEL": "@cf/meta/llama-3.2-3b-instruct"
+  },
+  "ai": { "binding": "AI" },
+  "observability": { "enabled": true }
+}
