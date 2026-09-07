@@ -15,6 +15,7 @@ type EconomicsEnv = {
 
 const productionWriteRoles = new Set<Role>(['owner', 'admin', 'manager', 'agronomist', 'operator']);
 const costWriteRoles = new Set<Role>(['owner', 'admin', 'manager']);
+const uuidQuery = z.uuid();
 
 const productionInput = z.object({
   fieldId: z.uuid(),
@@ -40,8 +41,16 @@ const costInput = z.object({
   notes: z.string().trim().max(2000).optional(),
 });
 
+function parseUuidQuery(value: string | undefined) {
+  if (!value) return { value: undefined as string | undefined, error: false };
+  const parsed = uuidQuery.safeParse(value);
+  return parsed.success
+    ? { value: parsed.data, error: false }
+    : { value: undefined as string | undefined, error: true };
+}
+
 async function validateSeasonAndField(
-  db: ReturnType<typeof neon>,
+  db: any,
   orgId: string,
   seasonId: string,
   fieldId?: string,
@@ -59,21 +68,22 @@ export function registerEconomicsRoutes(app: Hono<EconomicsEnv>) {
   app.get('/api/v1/production', async (c) => {
     const db = neon(c.env.DATABASE_URL);
     const orgId = c.get('organizationId');
-    const seasonId = c.req.query('seasonId');
-    const fieldId = c.req.query('fieldId');
-    if (!seasonId) return c.json({ error: 'missing_season' }, 400);
+    const season = parseUuidQuery(c.req.query('seasonId'));
+    const field = parseUuidQuery(c.req.query('fieldId'));
+    if (!season.value) return c.json({ error: season.error ? 'invalid_season' : 'missing_season' }, 400);
+    if (field.error) return c.json({ error: 'invalid_field' }, 400);
 
-    const scopeError = await validateSeasonAndField(db, orgId, seasonId, fieldId || undefined);
+    const scopeError = await validateSeasonAndField(db, orgId, season.value, field.value);
     if (scopeError) return c.json({ error: scopeError }, 404);
 
-    const rows = fieldId
+    const rows = field.value
       ? await db`SELECT p.id, p.field_id, p.season_id, p.occurred_on, p.tons, p.atr_kg_t, p.atr_price_per_kg, p.revenue_amount,
           CASE WHEN p.revenue_amount IS NOT NULL THEN p.revenue_amount
                WHEN p.atr_kg_t IS NOT NULL AND p.atr_price_per_kg IS NOT NULL THEN ROUND((p.tons * p.atr_kg_t * p.atr_price_per_kg)::numeric, 2)
                ELSE NULL END AS calculated_revenue,
           p.source, p.notes, p.created_at, f.code AS field_code
         FROM production_entries p JOIN fields f ON f.id=p.field_id
-        WHERE p.organization_id=${orgId} AND p.season_id=${seasonId} AND p.field_id=${fieldId}
+        WHERE p.organization_id=${orgId} AND p.season_id=${season.value} AND p.field_id=${field.value}
         ORDER BY p.occurred_on DESC, p.created_at DESC`
       : await db`SELECT p.id, p.field_id, p.season_id, p.occurred_on, p.tons, p.atr_kg_t, p.atr_price_per_kg, p.revenue_amount,
           CASE WHEN p.revenue_amount IS NOT NULL THEN p.revenue_amount
@@ -81,7 +91,7 @@ export function registerEconomicsRoutes(app: Hono<EconomicsEnv>) {
                ELSE NULL END AS calculated_revenue,
           p.source, p.notes, p.created_at, f.code AS field_code
         FROM production_entries p JOIN fields f ON f.id=p.field_id
-        WHERE p.organization_id=${orgId} AND p.season_id=${seasonId}
+        WHERE p.organization_id=${orgId} AND p.season_id=${season.value}
         ORDER BY p.occurred_on DESC, p.created_at DESC`;
     return c.json({ data: rows });
   });
@@ -110,21 +120,22 @@ export function registerEconomicsRoutes(app: Hono<EconomicsEnv>) {
   app.get('/api/v1/costs', async (c) => {
     const db = neon(c.env.DATABASE_URL);
     const orgId = c.get('organizationId');
-    const seasonId = c.req.query('seasonId');
-    const fieldId = c.req.query('fieldId');
-    if (!seasonId) return c.json({ error: 'missing_season' }, 400);
+    const season = parseUuidQuery(c.req.query('seasonId'));
+    const field = parseUuidQuery(c.req.query('fieldId'));
+    if (!season.value) return c.json({ error: season.error ? 'invalid_season' : 'missing_season' }, 400);
+    if (field.error) return c.json({ error: 'invalid_field' }, 400);
 
-    const scopeError = await validateSeasonAndField(db, orgId, seasonId, fieldId || undefined);
+    const scopeError = await validateSeasonAndField(db, orgId, season.value, field.value);
     if (scopeError) return c.json({ error: scopeError }, 404);
 
-    const rows = fieldId
+    const rows = field.value
       ? await db`SELECT c.id, c.field_id, c.season_id, c.category, c.occurred_on, c.amount, c.quantity, c.unit, c.supplier, c.notes, c.created_at, f.code AS field_code
         FROM cost_entries c LEFT JOIN fields f ON f.id=c.field_id
-        WHERE c.organization_id=${orgId} AND c.season_id=${seasonId} AND c.field_id=${fieldId}
+        WHERE c.organization_id=${orgId} AND c.season_id=${season.value} AND c.field_id=${field.value}
         ORDER BY c.occurred_on DESC, c.created_at DESC`
       : await db`SELECT c.id, c.field_id, c.season_id, c.category, c.occurred_on, c.amount, c.quantity, c.unit, c.supplier, c.notes, c.created_at, f.code AS field_code
         FROM cost_entries c LEFT JOIN fields f ON f.id=c.field_id
-        WHERE c.organization_id=${orgId} AND c.season_id=${seasonId}
+        WHERE c.organization_id=${orgId} AND c.season_id=${season.value}
         ORDER BY c.occurred_on DESC, c.created_at DESC`;
     return c.json({ data: rows });
   });
@@ -153,11 +164,12 @@ export function registerEconomicsRoutes(app: Hono<EconomicsEnv>) {
   app.get('/api/v1/economics/fields', async (c) => {
     const db = neon(c.env.DATABASE_URL);
     const orgId = c.get('organizationId');
-    const seasonId = c.req.query('seasonId');
-    const farmId = c.req.query('farmId');
-    if (!seasonId) return c.json({ error: 'missing_season' }, 400);
+    const season = parseUuidQuery(c.req.query('seasonId'));
+    const farm = parseUuidQuery(c.req.query('farmId'));
+    if (!season.value) return c.json({ error: season.error ? 'invalid_season' : 'missing_season' }, 400);
+    if (farm.error) return c.json({ error: 'invalid_farm' }, 400);
 
-    const scopeError = await validateSeasonAndField(db, orgId, seasonId);
+    const scopeError = await validateSeasonAndField(db, orgId, season.value);
     if (scopeError) return c.json({ error: scopeError }, 404);
 
     const rows = await db`
@@ -170,12 +182,12 @@ export function registerEconomicsRoutes(app: Hono<EconomicsEnv>) {
               CASE WHEN atr_kg_t IS NOT NULL AND atr_price_per_kg IS NOT NULL
                    THEN tons * atr_kg_t * atr_price_per_kg ELSE 0 END)) AS revenue
         FROM production_entries
-        WHERE organization_id=${orgId} AND season_id=${seasonId}
+        WHERE organization_id=${orgId} AND season_id=${season.value}
         GROUP BY field_id
       ), cst AS (
         SELECT field_id, SUM(amount) AS cost
         FROM cost_entries
-        WHERE organization_id=${orgId} AND season_id=${seasonId} AND field_id IS NOT NULL
+        WHERE organization_id=${orgId} AND season_id=${season.value} AND field_id IS NOT NULL
         GROUP BY field_id
       )
       SELECT f.id AS field_id, f.code, f.name, f.farm_id, f.area_ha, f.variety, f.cycle,
@@ -190,11 +202,11 @@ export function registerEconomicsRoutes(app: Hono<EconomicsEnv>) {
         CASE WHEN COALESCE(f.area_ha,0)>0 THEN ROUND((COALESCE(cst.cost,0)/f.area_ha)::numeric,2) ELSE NULL END AS cost_per_ha,
         CASE WHEN COALESCE(f.area_ha,0)>0 THEN ROUND(((COALESCE(p.revenue,0)-COALESCE(cst.cost,0))/f.area_ha)::numeric,2) ELSE NULL END AS margin_per_ha
       FROM fields f
-      LEFT JOIN field_seasons fs ON fs.field_id=f.id AND fs.season_id=${seasonId} AND fs.organization_id=${orgId}
+      LEFT JOIN field_seasons fs ON fs.field_id=f.id AND fs.season_id=${season.value} AND fs.organization_id=${orgId}
       LEFT JOIN p ON p.field_id=f.id
       LEFT JOIN cst ON cst.field_id=f.id
       WHERE f.organization_id=${orgId} AND f.active=true
-        AND (${farmId ?? null}::uuid IS NULL OR f.farm_id=${farmId ?? null}::uuid)
+        AND (${farm.value ?? null}::uuid IS NULL OR f.farm_id=${farm.value ?? null}::uuid)
       ORDER BY margin_per_ha DESC NULLS LAST, f.code`;
     return c.json({ data: rows });
   });
@@ -202,24 +214,25 @@ export function registerEconomicsRoutes(app: Hono<EconomicsEnv>) {
   app.get('/api/v1/economics/summary', async (c) => {
     const db = neon(c.env.DATABASE_URL);
     const orgId = c.get('organizationId');
-    const seasonId = c.req.query('seasonId');
-    const farmId = c.req.query('farmId');
-    if (!seasonId) return c.json({ error: 'missing_season' }, 400);
+    const season = parseUuidQuery(c.req.query('seasonId'));
+    const farm = parseUuidQuery(c.req.query('farmId'));
+    if (!season.value) return c.json({ error: season.error ? 'invalid_season' : 'missing_season' }, 400);
+    if (farm.error) return c.json({ error: 'invalid_farm' }, 400);
 
-    const scopeError = await validateSeasonAndField(db, orgId, seasonId);
+    const scopeError = await validateSeasonAndField(db, orgId, season.value);
     if (scopeError) return c.json({ error: scopeError }, 404);
 
     const [row] = await db`
       WITH scoped_fields AS (
         SELECT id, area_ha FROM fields
         WHERE organization_id=${orgId} AND active=true
-          AND (${farmId ?? null}::uuid IS NULL OR farm_id=${farmId ?? null}::uuid)
+          AND (${farm.value ?? null}::uuid IS NULL OR farm_id=${farm.value ?? null}::uuid)
       ), p AS (
         SELECT p.* FROM production_entries p JOIN scoped_fields f ON f.id=p.field_id
-        WHERE p.organization_id=${orgId} AND p.season_id=${seasonId}
+        WHERE p.organization_id=${orgId} AND p.season_id=${season.value}
       ), field_cost AS (
         SELECT c.* FROM cost_entries c JOIN scoped_fields f ON f.id=c.field_id
-        WHERE c.organization_id=${orgId} AND c.season_id=${seasonId}
+        WHERE c.organization_id=${orgId} AND c.season_id=${season.value}
       )
       SELECT
         COALESCE((SELECT SUM(area_ha) FROM scoped_fields),0) AS area_ha,
@@ -231,7 +244,9 @@ export function registerEconomicsRoutes(app: Hono<EconomicsEnv>) {
         COALESCE((SELECT SUM(COALESCE(revenue_amount,
           CASE WHEN atr_kg_t IS NOT NULL AND atr_price_per_kg IS NOT NULL THEN tons*atr_kg_t*atr_price_per_kg ELSE 0 END)) FROM p),0) AS revenue,
         COALESCE((SELECT SUM(amount) FROM field_cost),0) AS field_cost,
-        COALESCE((SELECT SUM(amount) FROM cost_entries c WHERE c.organization_id=${orgId} AND c.season_id=${seasonId} AND c.field_id IS NULL),0) AS unallocated_cost`;
+        CASE WHEN ${farm.value ?? null}::uuid IS NULL
+          THEN COALESCE((SELECT SUM(amount) FROM cost_entries c WHERE c.organization_id=${orgId} AND c.season_id=${season.value} AND c.field_id IS NULL),0)
+          ELSE 0 END AS unallocated_cost`;
 
     const result = row as Record<string, unknown>;
     const area = Number(result.area_ha ?? 0);
