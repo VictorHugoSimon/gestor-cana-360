@@ -10,9 +10,12 @@
     "test": "echo no-tests-yet"
   },
   "dependencies": {
+    "@neondatabase/neon-js": "^0.7.0-beta",
     "maplibre-gl": "^5.7.1",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "terra-draw": "^1.33.0",
+    "terra-draw-maplibre-gl-adapter": "^1.4.1"
   },
   "devDependencies": {
     "@types/react": "^19.1.12",
