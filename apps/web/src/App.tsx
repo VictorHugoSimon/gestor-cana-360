@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import maplibregl, { Map as MapLibreMap, type GeoJSONSource } from 'maplibre-gl';
+import { useEffect, useMemo, useState } from 'react';
 import { authClient, getApiToken } from './auth';
+import { GeoFieldMap } from './GeoFieldMap';
 
 type Farm = {
   id: string;
@@ -44,7 +44,6 @@ type DashboardSummary = {
 };
 
 type SessionUser = { id?: string; name?: string; email?: string };
-
 type ApiEnvelope<T> = { data: T };
 
 class ApiError extends Error {
@@ -72,57 +71,6 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const body = await response.json().catch(() => ({})) as { error?: string };
   if (!response.ok) throw new ApiError(response.status, body.error ?? 'api_error');
   return body as T;
-}
-
-function FieldMap({ fields }: { fields: Field[] }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<MapLibreMap | null>(null);
-
-  useEffect(() => {
-    if (!ref.current || mapRef.current) return;
-    const map = new maplibregl.Map({
-      container: ref.current,
-      style: 'https://demotiles.maplibre.org/style.json',
-      center: [-50.08, -21.42],
-      zoom: 8,
-      attributionControl: false,
-    });
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-    mapRef.current = map;
-    return () => { map.remove(); mapRef.current = null; };
-  }, []);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    const data = {
-      type: 'FeatureCollection' as const,
-      features: fields
-        .filter((field) => field.geometry)
-        .map((field) => ({
-          type: 'Feature' as const,
-          geometry: field.geometry as never,
-          properties: { id: field.id, code: field.code, variety: field.variety ?? '' },
-        })),
-    };
-
-    const sync = () => {
-      const source = map.getSource('fields') as GeoJSONSource | undefined;
-      if (source) {
-        source.setData(data);
-        return;
-      }
-      map.addSource('fields', { type: 'geojson', data });
-      map.addLayer({ id: 'fields-fill', type: 'fill', source: 'fields', paint: { 'fill-color': '#5c8a3f', 'fill-opacity': 0.28 } });
-      map.addLayer({ id: 'fields-line', type: 'line', source: 'fields', paint: { 'line-color': '#2f4f35', 'line-width': 2 } });
-    };
-
-    if (map.isStyleLoaded()) sync();
-    else map.once('load', sync);
-  }, [fields]);
-
-  return <div className="map" ref={ref} aria-label="Mapa da propriedade" />;
 }
 
 export function App() {
@@ -164,7 +112,7 @@ export function App() {
       setSelectedSeasonId(seasonId);
       const fieldResult = await api<ApiEnvelope<Field[]>>(`/api/v1/fields${farmId ? `?farmId=${encodeURIComponent(farmId)}` : ''}`);
       setFields(fieldResult.data);
-      setSelectedFieldId((current) => current || fieldResult.data[0]?.id || '');
+      setSelectedFieldId((current) => fieldResult.data.some((field) => field.id === current) ? current : fieldResult.data[0]?.id || '');
       if (seasonId) {
         const dashboard = await api<ApiEnvelope<DashboardSummary>>(`/api/v1/dashboard/summary?seasonId=${encodeURIComponent(seasonId)}`);
         setSummary(dashboard.data);
@@ -289,13 +237,22 @@ export function App() {
           </section>
 
           <section className="grid2">
-            <div className="panel mapPanel"><div className="panelTitle"><span>MAPA DA PROPRIEDADE</span><small>MapLibre + PostGIS</small></div><FieldMap fields={fields} /></div>
+            <div className="panel mapPanel">
+              <div className="panelTitle"><span>MAPA DA PROPRIEDADE</span><small>MapLibre + Terra Draw + PostGIS</small></div>
+              <GeoFieldMap
+                fields={fields}
+                farmId={selectedFarmId}
+                selectedFieldId={selectedFieldId}
+                onSelect={setSelectedFieldId}
+                onChanged={loadWorkspace}
+              />
+            </div>
             <div className="panel details">
               <div className="panelTitle"><span>PRONTUÁRIO DO TALHÃO</span><small>{selectedField?.code ?? '—'}</small></div>
               <h2>{selectedField?.code ?? 'Sem talhão'}</h2>
               <p className="muted">{selectedField ? `${selectedField.variety ?? 'Variedade não informada'} · ${Number(selectedField.area_ha ?? 0).toLocaleString('pt-BR')} ha` : 'Cadastre ou desenhe o primeiro talhão.'}</p>
               <div className="detailGrid"><Metric label="VARIEDADE" value={selectedField?.variety ?? '—'} /><Metric label="CICLO" value={selectedField?.cycle ?? '—'} /><Metric label="ÁREA" value={selectedField ? `${Number(selectedField.area_ha ?? 0).toLocaleString('pt-BR')} ha` : '—'} /><Metric label="STATUS" value={selectedField?.active ? 'ATIVO' : '—'} /></div>
-              <div className="notice">Dados carregados do Neon. A próxima etapa adiciona desenho e edição do polígono diretamente no mapa, com hectares calculados pelo PostGIS.</div>
+              <div className="notice">O mapa já permite desenhar, editar e importar polígonos. A área exibida após salvar é calculada no PostGIS, não pelo navegador.</div>
             </div>
           </section>
 
@@ -303,7 +260,7 @@ export function App() {
             <div className="panelTitle"><span>TALHÕES DA FAZENDA</span><small>banco real</small></div>
             <div className="table">
               <div className="tr head"><span>TALHÃO</span><span>VARIEDADE</span><span>HA</span><span>CICLO</span><span>GEO</span><span>STATUS</span></div>
-              {fields.map((field) => <button key={field.id} className="tr" onClick={() => setSelectedFieldId(field.id)}><strong>{field.code}</strong><span>{field.variety ?? '—'}</span><span>{Number(field.area_ha ?? 0).toLocaleString('pt-BR')}</span><span>{field.cycle ?? '—'}</span><span>{field.geometry ? 'Sim' : 'Não'}</span><span className={field.geometry ? 'ok' : 'attention'}>{field.geometry ? 'Mapeado' : 'Sem polígono'}</span></button>)}
+              {fields.map((field) => <button key={field.id} className={`tr ${field.id === selectedFieldId ? 'selectedRow' : ''}`} onClick={() => setSelectedFieldId(field.id)}><strong>{field.code}</strong><span>{field.variety ?? '—'}</span><span>{Number(field.area_ha ?? 0).toLocaleString('pt-BR')}</span><span>{field.cycle ?? '—'}</span><span>{field.geometry ? 'Sim' : 'Não'}</span><span className={field.geometry ? 'ok' : 'attention'}>{field.geometry ? 'Mapeado' : 'Sem polígono'}</span></button>)}
               {!fields.length && <div className="emptyState">Nenhum talhão cadastrado para esta fazenda.</div>}
             </div>
           </section>
