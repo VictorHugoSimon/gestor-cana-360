@@ -27,6 +27,11 @@ CREATE INDEX IF NOT EXISTS work_orders_org_season_schedule_idx
 CREATE INDEX IF NOT EXISTS work_orders_org_farm_status_idx
   ON work_orders(organization_id, farm_id, status);
 
+ALTER TABLE cost_entries
+  ADD COLUMN IF NOT EXISTS work_order_id uuid REFERENCES work_orders(id) ON DELETE SET NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS cost_entries_work_order_uidx
+  ON cost_entries(work_order_id) WHERE work_order_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS work_order_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
