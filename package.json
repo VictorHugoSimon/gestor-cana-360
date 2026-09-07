@@ -1,0 +1,14 @@
+{
+  "name": "gestor-cana-360",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.15.0",
+  "scripts": {
+    "dev:web": "pnpm --filter @gc360/web dev",
+    "dev:api": "pnpm --filter @gc360/api dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "check": "pnpm typecheck && pnpm build"
+  }
+}
