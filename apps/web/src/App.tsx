@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { authClient, getApiToken } from './auth';
 import { GeoFieldMap } from './GeoFieldMap';
 import { OperationsPanel } from './OperationsPanel';
+import { HarvestPanel } from './HarvestPanel';
 
 type Farm = {
   id: string;
@@ -198,6 +199,10 @@ export function App() {
     );
   }
 
+  const harvestSection = active === 'Colheita' || active === 'CTT' || active === 'Usinas'
+    ? active as 'Colheita' | 'CTT' | 'Usinas'
+    : null;
+
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -236,6 +241,14 @@ export function App() {
               seasonId={selectedSeasonId}
               fields={fields}
               role={workspace?.role ?? 'viewer'}
+            />
+          ) : harvestSection ? (
+            <HarvestPanel
+              farmId={selectedFarmId}
+              seasonId={selectedSeasonId}
+              fields={fields}
+              role={workspace?.role ?? 'viewer'}
+              section={harvestSection}
             />
           ) : (
             <>
