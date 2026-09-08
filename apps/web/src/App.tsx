@@ -7,6 +7,7 @@ import { AssetsPanel } from './AssetsPanel';
 import { AgronomyPanel } from './AgronomyPanel';
 import { ClimateSatellitePanel } from './ClimateSatellitePanel';
 import { PlanningLeasesPanel } from './PlanningLeasesPanel';
+import { DecisionSupportPanel } from './DecisionSupportPanel';
 
 type Farm={id:string;name:string;municipality:string|null;state:string|null;total_area_ha:string|number|null};
 type Season={id:string;name:string;starts_on:string|null;ends_on:string|null;status:'planned'|'active'|'closed'};
@@ -45,6 +46,7 @@ export function App(){
   const agronomySection=active==='Solo'||active==='Pragas'?active as 'Solo'|'Pragas':null;
   const climateSatelliteSection=active==='Clima'||active==='Satélite'?active as 'Clima'|'Satélite':null;
   const planningLeaseSection=active==='Planejamento'||active==='Arrendamentos'?active as 'Planejamento'|'Arrendamentos':null;
+  const decisionSupportSection=active==='Simulador'||active==='IA agronômica'?active as 'Simulador'|'IA agronômica':null;
 
   let moduleContent:React.ReactNode=null;
   if(active==='Operações / OS')moduleContent=<OperationsPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role??'viewer'}/>;
@@ -53,6 +55,7 @@ export function App(){
   else if(agronomySection)moduleContent=<AgronomyPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role??'viewer'} section={agronomySection}/>;
   else if(climateSatelliteSection)moduleContent=<ClimateSatellitePanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role??'viewer'} section={climateSatelliteSection}/>;
   else if(planningLeaseSection)moduleContent=<PlanningLeasesPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role??'viewer'} section={planningLeaseSection}/>;
+  else if(decisionSupportSection)moduleContent=<DecisionSupportPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} section={decisionSupportSection}/>;
 
   return <div className="shell"><aside className="sidebar"><div className="brand"><span>GC</span><div><strong>Gestor Cana 360</strong><small>{selectedSeason?.name??'Sem safra ativa'}</small></div></div><div className="farm"><strong>{selectedFarm?.name??'Cadastre uma fazenda'}</strong><br/><small>{workspace?.organization?.name??'Organização'} · {workspace?.role}</small></div><div className="sidebarActions"><button onClick={()=>setShowFarmForm(v=>!v)}>+ Fazenda</button><button onClick={()=>setShowSeasonForm(v=>!v)}>+ Safra</button></div>{showFarmForm&&<FarmForm onCreated={async()=>{setShowFarmForm(false);await loadWorkspace();}}/>}{showSeasonForm&&<SeasonForm onCreated={async()=>{setShowSeasonForm(false);await loadWorkspace();}}/>}<nav>{nav.map(item=><button key={item} className={active===item?'active':''} onClick={()=>setActive(item)}>{item}</button>)}</nav></aside><main><header><div><small>GESTÃO AGRÍCOLA / {active.toUpperCase()}</small><h1>{active}</h1></div><div className="headerRight"><select value={selectedFarmId} onChange={e=>setSelectedFarmId(e.target.value)} aria-label="Fazenda">{farms.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select><select value={selectedSeasonId} onChange={e=>setSelectedSeasonId(e.target.value)} aria-label="Safra">{seasons.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><div className="status"><i/> DEV</div><button className="textButton" onClick={signOut}>Sair</button></div></header><div className="content">{error&&<div className="errorBanner">{error}</div>}{moduleContent??<DashboardView fields={fields} selectedField={selectedField} selectedFieldId={selectedFieldId} selectedSeason={selectedSeason} selectedFarmId={selectedFarmId} summary={summary} totalMappedArea={totalMappedArea} onSelect={setSelectedFieldId} onChanged={loadWorkspace}/>}</div></main></div>;
 }
