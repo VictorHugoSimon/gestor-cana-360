@@ -9,6 +9,7 @@ import './assets.css';
 import './agronomy.css';
 import './climateSatellite.css';
 import './planningLeases.css';
+import './decisionSupport.css';
 import { App } from './App';
 import { EconomicsConsole } from './EconomicsConsole';
 
