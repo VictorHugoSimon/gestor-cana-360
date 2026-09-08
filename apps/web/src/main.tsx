@@ -4,6 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles.css';
 import './economics.css';
 import './operations.css';
+import './harvest.css';
 import { App } from './App';
 import { EconomicsConsole } from './EconomicsConsole';
 
