@@ -7,6 +7,7 @@ import './operations.css';
 import './harvest.css';
 import './assets.css';
 import './agronomy.css';
+import './climateSatellite.css';
 import { App } from './App';
 import { EconomicsConsole } from './EconomicsConsole';
 

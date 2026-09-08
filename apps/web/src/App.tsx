@@ -5,6 +5,7 @@ import { OperationsPanel } from './OperationsPanel';
 import { HarvestPanel } from './HarvestPanel';
 import { AssetsPanel } from './AssetsPanel';
 import { AgronomyPanel } from './AgronomyPanel';
+import { ClimateSatellitePanel } from './ClimateSatellitePanel';
 
 type Farm = {
   id: string;
@@ -210,6 +211,9 @@ export function App() {
   const agronomySection = active === 'Solo' || active === 'Pragas'
     ? active as 'Solo' | 'Pragas'
     : null;
+  const climateSatelliteSection = active === 'Clima' || active === 'Satélite'
+    ? active as 'Clima' | 'Satélite'
+    : null;
 
   return (
     <div className="shell">
@@ -251,6 +255,8 @@ export function App() {
             <AssetsPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role ?? 'viewer'} section={assetSection} />
           ) : agronomySection ? (
             <AgronomyPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role ?? 'viewer'} section={agronomySection} />
+          ) : climateSatelliteSection ? (
+            <ClimateSatellitePanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role ?? 'viewer'} section={climateSatelliteSection} />
           ) : (
             <>
               <section className="kpis">
