@@ -1,17 +1,16 @@
 import { Hono } from 'hono';
 import { neon } from '@neondatabase/serverless';
 import { z } from 'zod';
+import { calculateScenario } from './domain/simulator';
 
 type Role='owner'|'admin'|'manager'|'agronomist'|'operator'|'viewer';
 type Env={Bindings:{DATABASE_URL:string;AI_PROVIDER?:string;AI_MODEL?:string;OPENAI_API_KEY?:string;OPENAI_MODEL?:string;AI?:{run(model:string,input:unknown):Promise<unknown>}};Variables:{authUserId:string;organizationId:string;role:Role}};
 const simulatorInput=z.object({areaHa:z.number().positive().max(10_000_000),tch:z.number().nonnegative().max(1000),atrKgT:z.number().nonnegative().max(1000),atrPricePerKg:z.number().nonnegative().max(1000),costPerHa:z.number().nonnegative().max(100_000_000),fixedCosts:z.number().nonnegative().max(10_000_000_000).default(0),leaseCost:z.number().nonnegative().max(10_000_000_000).default(0),harvestLossPct:z.number().min(0).max(100).default(0)});
 const agronomyInput=z.object({fieldId:z.uuid(),seasonId:z.uuid(),question:z.string().trim().min(3).max(2000)});
-
-function round(v:number,d=2){const p=10**d;return Math.round((v+Number.EPSILON)*p)/p;}
 function textFromOpenAi(value:any):string{if(typeof value?.output_text==='string')return value.output_text;const chunks:Array<string>=[];for(const out of value?.output??[]){for(const c of out?.content??[]){if(typeof c?.text==='string')chunks.push(c.text);}}return chunks.join('\n').trim();}
 
 export function registerDecisionSupportRoutes(app:Hono<Env>){
-  app.post('/api/v1/simulator',async c=>{const p=simulatorInput.safeParse(await c.req.json());if(!p.success)return c.json({error:'validation_error',details:p.error.flatten()},422);const b=p.data;const grossTons=b.areaHa*b.tch;const netTons=grossTons*(1-b.harvestLossPct/100);const atrMassKg=netTons*b.atrKgT;const revenue=atrMassKg*b.atrPricePerKg;const variableCost=b.areaHa*b.costPerHa;const totalCost=variableCost+b.fixedCosts+b.leaseCost;const margin=revenue-totalCost;const marginPerHa=margin/b.areaHa;const revenuePerHa=revenue/b.areaHa;const denominator=b.areaHa*(1-b.harvestLossPct/100)*b.atrKgT*b.atrPricePerKg;const breakEvenTch=denominator>0?totalCost/denominator:null;const tchDenominator=b.areaHa*(1-b.harvestLossPct/100)*b.tch*b.atrPricePerKg;const breakEvenAtr=tchDenominator>0?totalCost/tchDenominator:null;return c.json({data:{grossTons:round(grossTons,3),netTons:round(netTons,3),atrMassKg:round(atrMassKg,2),revenue:round(revenue),variableCost:round(variableCost),totalCost:round(totalCost),margin:round(margin),marginPerHa:round(marginPerHa),revenuePerHa:round(revenuePerHa),marginPct:revenue>0?round(margin/revenue*100):null,breakEvenTch:breakEvenTch==null?null:round(breakEvenTch,2),breakEvenAtrKgT:breakEvenAtr==null?null:round(breakEvenAtr,2)}});});
+  app.post('/api/v1/simulator',async c=>{const p=simulatorInput.safeParse(await c.req.json());if(!p.success)return c.json({error:'validation_error',details:p.error.flatten()},422);return c.json({data:calculateScenario(p.data)});});
 
   app.post('/api/v1/ai/agronomy',async c=>{const p=agronomyInput.safeParse(await c.req.json());if(!p.success)return c.json({error:'validation_error',details:p.error.flatten()},422);const b=p.data,orgId=c.get('organizationId'),db=neon(c.env.DATABASE_URL);const [scope]=await db`SELECT f.id,f.code,f.name,f.area_ha,f.variety,f.cycle,f.farm_id,s.name AS season_name,fs.cut_number,fs.status AS crop_status,fs.expected_tch,fs.expected_atr,fs.expected_tons,fs.planned_planting_on,fs.planned_harvest_on FROM fields f CROSS JOIN seasons s LEFT JOIN field_seasons fs ON fs.field_id=f.id AND fs.season_id=s.id WHERE f.id=${b.fieldId} AND f.organization_id=${orgId} AND f.active=true AND s.id=${b.seasonId} AND s.organization_id=${orgId} LIMIT 1`;if(!scope)return c.json({error:'field_or_season_not_found'},404);
     const [production,soil,pests,weather,vegetation,operations,harvest]=await Promise.all([
