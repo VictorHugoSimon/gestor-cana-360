@@ -3,6 +3,7 @@ import { authClient, getApiToken } from './auth';
 import { GeoFieldMap } from './GeoFieldMap';
 import { OperationsPanel } from './OperationsPanel';
 import { HarvestPanel } from './HarvestPanel';
+import { AssetsPanel } from './AssetsPanel';
 
 type Farm = {
   id: string;
@@ -202,6 +203,9 @@ export function App() {
   const harvestSection = active === 'Colheita' || active === 'CTT' || active === 'Usinas'
     ? active as 'Colheita' | 'CTT' | 'Usinas'
     : null;
+  const assetSection = active === 'Máquinas' || active === 'Estoque'
+    ? active as 'Máquinas' | 'Estoque'
+    : null;
 
   return (
     <div className="shell">
@@ -236,20 +240,11 @@ export function App() {
         <div className="content">
           {error && <div className="errorBanner">{error}</div>}
           {active === 'Operações / OS' ? (
-            <OperationsPanel
-              farmId={selectedFarmId}
-              seasonId={selectedSeasonId}
-              fields={fields}
-              role={workspace?.role ?? 'viewer'}
-            />
+            <OperationsPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role ?? 'viewer'} />
           ) : harvestSection ? (
-            <HarvestPanel
-              farmId={selectedFarmId}
-              seasonId={selectedSeasonId}
-              fields={fields}
-              role={workspace?.role ?? 'viewer'}
-              section={harvestSection}
-            />
+            <HarvestPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role ?? 'viewer'} section={harvestSection} />
+          ) : assetSection ? (
+            <AssetsPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role ?? 'viewer'} section={assetSection} />
           ) : (
             <>
               <section className="kpis">
@@ -262,13 +257,7 @@ export function App() {
               <section className="grid2">
                 <div className="panel mapPanel">
                   <div className="panelTitle"><span>MAPA DA PROPRIEDADE</span><small>MapLibre + Terra Draw + PostGIS</small></div>
-                  <GeoFieldMap
-                    fields={fields}
-                    farmId={selectedFarmId}
-                    selectedFieldId={selectedFieldId}
-                    onSelect={setSelectedFieldId}
-                    onChanged={loadWorkspace}
-                  />
+                  <GeoFieldMap fields={fields} farmId={selectedFarmId} selectedFieldId={selectedFieldId} onSelect={setSelectedFieldId} onChanged={loadWorkspace} />
                 </div>
                 <div className="panel details">
                   <div className="panelTitle"><span>PRONTUÁRIO DO TALHÃO</span><small>{selectedField?.code ?? '—'}</small></div>
@@ -343,7 +332,6 @@ function FarmForm({ onCreated }: { onCreated: () => Promise<void> }) {
   const [name, setName] = useState('');
   const [municipality, setMunicipality] = useState('');
   const [state, setState] = useState('SP');
-
   return <form className="miniForm" onSubmit={async (event) => { event.preventDefault(); await api('/api/v1/farms', { method: 'POST', body: JSON.stringify({ name, municipality: municipality || undefined, state }) }); await onCreated(); }}><strong>Nova fazenda</strong><input placeholder="Nome" value={name} onChange={(event) => setName(event.target.value)} required /><input placeholder="Município" value={municipality} onChange={(event) => setMunicipality(event.target.value)} /><input placeholder="UF" value={state} onChange={(event) => setState(event.target.value.toUpperCase().slice(0, 2))} maxLength={2} /><button type="submit">Salvar</button></form>;
 }
 
