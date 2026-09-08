@@ -6,6 +6,7 @@ import './economics.css';
 import './operations.css';
 import './harvest.css';
 import './assets.css';
+import './agronomy.css';
 import { App } from './App';
 import { EconomicsConsole } from './EconomicsConsole';
 

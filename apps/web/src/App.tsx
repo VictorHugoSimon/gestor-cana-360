@@ -4,6 +4,7 @@ import { GeoFieldMap } from './GeoFieldMap';
 import { OperationsPanel } from './OperationsPanel';
 import { HarvestPanel } from './HarvestPanel';
 import { AssetsPanel } from './AssetsPanel';
+import { AgronomyPanel } from './AgronomyPanel';
 
 type Farm = {
   id: string;
@@ -206,6 +207,9 @@ export function App() {
   const assetSection = active === 'Máquinas' || active === 'Estoque'
     ? active as 'Máquinas' | 'Estoque'
     : null;
+  const agronomySection = active === 'Solo' || active === 'Pragas'
+    ? active as 'Solo' | 'Pragas'
+    : null;
 
   return (
     <div className="shell">
@@ -245,6 +249,8 @@ export function App() {
             <HarvestPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role ?? 'viewer'} section={harvestSection} />
           ) : assetSection ? (
             <AssetsPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role ?? 'viewer'} section={assetSection} />
+          ) : agronomySection ? (
+            <AgronomyPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role ?? 'viewer'} section={agronomySection} />
           ) : (
             <>
               <section className="kpis">
