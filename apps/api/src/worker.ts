@@ -6,6 +6,7 @@ import { registerAssetsRoutes } from './assets';
 import { registerAgronomyRoutes } from './agronomy';
 import { registerClimateSatelliteRoutes } from './climateSatellite';
 import { registerPlanningLeaseRoutes } from './planningLeases';
+import { registerDecisionSupportRoutes } from './decisionSupport';
 
 registerEconomicsRoutes(app as never);
 registerOperationsRoutes(app as never);
@@ -14,5 +15,6 @@ registerAssetsRoutes(app as never);
 registerAgronomyRoutes(app as never);
 registerClimateSatelliteRoutes(app as never);
 registerPlanningLeaseRoutes(app as never);
+registerDecisionSupportRoutes(app as never);
 
 export default app;
