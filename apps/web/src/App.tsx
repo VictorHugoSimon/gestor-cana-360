@@ -8,6 +8,8 @@ import { AgronomyPanel } from './AgronomyPanel';
 import { ClimateSatellitePanel } from './ClimateSatellitePanel';
 import { PlanningLeasesPanel } from './PlanningLeasesPanel';
 import { DecisionSupportPanel } from './DecisionSupportPanel';
+import { FieldWorkspacePanel } from './FieldWorkspacePanel';
+import { EconomicsEmbeddedPanel } from './EconomicsEmbeddedPanel';
 
 type Farm={id:string;name:string;municipality:string|null;state:string|null;total_area_ha:string|number|null};
 type Season={id:string;name:string;starts_on:string|null;ends_on:string|null;status:'planned'|'active'|'closed'};
@@ -16,8 +18,8 @@ type Workspace={auth_user_id:string;role:string;organization:{id:string;name:str
 type DashboardSummary={mapped_area_ha:string|number;produced_tons:string|number;total_cost:string|number;open_alerts:string|number};
 type SessionUser={id?:string;name?:string;email?:string};
 type ApiEnvelope<T>={data:T};
-
 class ApiError extends Error{status:number;constructor(status:number,message:string){super(message);this.status=status;}}
+
 const nav=['Visão geral','Mapa','Talhões','Colheita','Financeiro','Operações / OS','Planejamento','CTT','Máquinas','Estoque','Solo','Pragas','Clima','Satélite','Produção','Usinas','Arrendamentos','Simulador','IA agronômica'];
 const apiBase=(import.meta.env.VITE_API_URL as string|undefined)??'http://localhost:8787';
 async function api<T>(path:string,init?:RequestInit):Promise<T>{const token=await getApiToken();if(!token)throw new ApiError(401,'Sessão expirada.');const response=await fetch(`${apiBase}${path}`,{...init,headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`,...(init?.headers??{})}});const body=await response.json().catch(()=>({})) as {error?:string};if(!response.ok)throw new ApiError(response.status,body.error??'api_error');return body as T;}
@@ -28,11 +30,9 @@ export function App(){
   const selectedField=fields.find(f=>f.id===selectedFieldId)??fields[0]??null;const selectedFarm=farms.find(f=>f.id===selectedFarmId)??farms[0]??null;const selectedSeason=seasons.find(s=>s.id===selectedSeasonId)??seasons[0]??null;
 
   async function loadWorkspace(){setError('');try{const me=await api<ApiEnvelope<Workspace>>('/api/v1/me');setWorkspace(me.data);setNeedsClaim(false);const [fr,sr]=await Promise.all([api<ApiEnvelope<Farm[]>>('/api/v1/farms'),api<ApiEnvelope<Season[]>>('/api/v1/seasons')]);setFarms(fr.data);setSeasons(sr.data);const farmId=selectedFarmId||fr.data[0]?.id||'';const seasonId=selectedSeasonId||sr.data.find(s=>s.status==='active')?.id||sr.data[0]?.id||'';setSelectedFarmId(farmId);setSelectedSeasonId(seasonId);const fieldResult=await api<ApiEnvelope<Field[]>>(`/api/v1/fields${farmId?`?farmId=${encodeURIComponent(farmId)}`:''}`);setFields(fieldResult.data);setSelectedFieldId(cur=>fieldResult.data.some(f=>f.id===cur)?cur:fieldResult.data[0]?.id||'');if(seasonId){const dashboard=await api<ApiEnvelope<DashboardSummary>>(`/api/v1/dashboard/summary?seasonId=${encodeURIComponent(seasonId)}`);setSummary(dashboard.data);}else setSummary(null);}catch(cause){if(cause instanceof ApiError&&cause.status===403){setNeedsClaim(true);setWorkspace(null);return;}setError(cause instanceof Error?cause.message:'Falha ao carregar o ambiente.');}}
-
   useEffect(()=>{authClient.getSession().then(async result=>{const sessionUser=result.data?.user as SessionUser|undefined;if(result.data?.session&&sessionUser){setUser(sessionUser);await loadWorkspace();}setAuthLoading(false);}).catch(()=>setAuthLoading(false));},[]);
   useEffect(()=>{if(!workspace||!selectedFarmId)return;api<ApiEnvelope<Field[]>>(`/api/v1/fields?farmId=${encodeURIComponent(selectedFarmId)}`).then(r=>{setFields(r.data);setSelectedFieldId(r.data[0]?.id??'');}).catch(c=>setError(c instanceof Error?c.message:'Falha ao carregar talhões.'));},[selectedFarmId,workspace]);
   useEffect(()=>{if(!workspace||!selectedSeasonId)return;api<ApiEnvelope<DashboardSummary>>(`/api/v1/dashboard/summary?seasonId=${encodeURIComponent(selectedSeasonId)}`).then(r=>setSummary(r.data)).catch(c=>setError(c instanceof Error?c.message:'Falha ao carregar indicadores.'));},[selectedSeasonId,workspace]);
-
   async function claimDevelopment(){setError('');try{await api('/api/v1/onboarding/claim',{method:'POST'});await loadWorkspace();}catch(cause){setError(cause instanceof Error?cause.message:'Não foi possível ativar a organização DEV.');}}
   async function signOut(){await authClient.signOut();setUser(null);setWorkspace(null);setNeedsClaim(false);setFarms([]);setSeasons([]);setFields([]);}
   const totalMappedArea=useMemo(()=>fields.reduce((sum,f)=>sum+Number(f.area_ha??0),0),[fields]);
@@ -46,16 +46,19 @@ export function App(){
   const agronomySection=active==='Solo'||active==='Pragas'?active as 'Solo'|'Pragas':null;
   const climateSatelliteSection=active==='Clima'||active==='Satélite'?active as 'Clima'|'Satélite':null;
   const planningLeaseSection=active==='Planejamento'||active==='Arrendamentos'?active as 'Planejamento'|'Arrendamentos':null;
-  const decisionSupportSection=active==='Simulador'||active==='IA agronômica'?active as 'Simulador'|'IA agronômica':null;
-
+  const decisionSection=active==='Simulador'||active==='IA agronômica'?active as 'Simulador'|'IA agronômica':null;
+  const fieldSection=active==='Mapa'||active==='Talhões'?active as 'Mapa'|'Talhões':null;
+  const economicsSection=active==='Financeiro'||active==='Produção'?active as 'Financeiro'|'Produção':null;
   let moduleContent:React.ReactNode=null;
   if(active==='Operações / OS')moduleContent=<OperationsPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role??'viewer'}/>;
+  else if(fieldSection)moduleContent=<FieldWorkspacePanel farmId={selectedFarmId} fields={fields} selectedFieldId={selectedFieldId} section={fieldSection} onSelect={setSelectedFieldId} onChanged={loadWorkspace}/>;
+  else if(economicsSection)moduleContent=<EconomicsEmbeddedPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role??'viewer'} section={economicsSection}/>;
   else if(harvestSection)moduleContent=<HarvestPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role??'viewer'} section={harvestSection}/>;
   else if(assetSection)moduleContent=<AssetsPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role??'viewer'} section={assetSection}/>;
   else if(agronomySection)moduleContent=<AgronomyPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role??'viewer'} section={agronomySection}/>;
   else if(climateSatelliteSection)moduleContent=<ClimateSatellitePanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role??'viewer'} section={climateSatelliteSection}/>;
   else if(planningLeaseSection)moduleContent=<PlanningLeasesPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} role={workspace?.role??'viewer'} section={planningLeaseSection}/>;
-  else if(decisionSupportSection)moduleContent=<DecisionSupportPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} section={decisionSupportSection}/>;
+  else if(decisionSection)moduleContent=<DecisionSupportPanel farmId={selectedFarmId} seasonId={selectedSeasonId} fields={fields} section={decisionSection}/>;
 
   return <div className="shell"><aside className="sidebar"><div className="brand"><span>GC</span><div><strong>Gestor Cana 360</strong><small>{selectedSeason?.name??'Sem safra ativa'}</small></div></div><div className="farm"><strong>{selectedFarm?.name??'Cadastre uma fazenda'}</strong><br/><small>{workspace?.organization?.name??'Organização'} · {workspace?.role}</small></div><div className="sidebarActions"><button onClick={()=>setShowFarmForm(v=>!v)}>+ Fazenda</button><button onClick={()=>setShowSeasonForm(v=>!v)}>+ Safra</button></div>{showFarmForm&&<FarmForm onCreated={async()=>{setShowFarmForm(false);await loadWorkspace();}}/>}{showSeasonForm&&<SeasonForm onCreated={async()=>{setShowSeasonForm(false);await loadWorkspace();}}/>}<nav>{nav.map(item=><button key={item} className={active===item?'active':''} onClick={()=>setActive(item)}>{item}</button>)}</nav></aside><main><header><div><small>GESTÃO AGRÍCOLA / {active.toUpperCase()}</small><h1>{active}</h1></div><div className="headerRight"><select value={selectedFarmId} onChange={e=>setSelectedFarmId(e.target.value)} aria-label="Fazenda">{farms.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select><select value={selectedSeasonId} onChange={e=>setSelectedSeasonId(e.target.value)} aria-label="Safra">{seasons.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><div className="status"><i/> DEV</div><button className="textButton" onClick={signOut}>Sair</button></div></header><div className="content">{error&&<div className="errorBanner">{error}</div>}{moduleContent??<DashboardView fields={fields} selectedField={selectedField} selectedFieldId={selectedFieldId} selectedSeason={selectedSeason} selectedFarmId={selectedFarmId} summary={summary} totalMappedArea={totalMappedArea} onSelect={setSelectedFieldId} onChanged={loadWorkspace}/>}</div></main></div>;
 }
