@@ -10,12 +10,11 @@ import './agronomy.css';
 import './climateSatellite.css';
 import './planningLeases.css';
 import './decisionSupport.css';
+import './navigationConsolidation.css';
 import { App } from './App';
-import { EconomicsConsole } from './EconomicsConsole';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />
-    <EconomicsConsole />
   </React.StrictMode>,
 );
