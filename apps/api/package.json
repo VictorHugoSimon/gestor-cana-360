@@ -9,7 +9,7 @@
     "build": "wrangler deploy --dry-run",
     "build:dev": "wrangler deploy --dry-run --env dev",
     "typecheck": "tsc --noEmit --pretty false",
-    "test": "echo no-tests-yet",
+    "test": "vitest run",
     "deploy": "wrangler deploy",
     "deploy:dev": "wrangler deploy --env dev"
   },
@@ -23,6 +23,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260907.1",
     "typescript": "^5.9.2",
+    "vitest": "^5.0.0",
     "wrangler": "^4.34.0"
   }
 }
