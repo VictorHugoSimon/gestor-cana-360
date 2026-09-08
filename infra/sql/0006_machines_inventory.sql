@@ -21,8 +21,7 @@ CREATE TABLE IF NOT EXISTS machines (
   UNIQUE (organization_id, code)
 );
 
-CREATE INDEX IF NOT EXISTS machines_org_farm_status_idx
-  ON machines(organization_id, farm_id, status);
+CREATE INDEX IF NOT EXISTS machines_org_farm_status_idx ON machines(organization_id, farm_id, status);
 
 CREATE TABLE IF NOT EXISTS machine_usages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -43,11 +42,8 @@ CREATE TABLE IF NOT EXISTS machine_usages (
   created_at timestamptz NOT NULL DEFAULT now(),
   CHECK (end_hour_meter IS NULL OR start_hour_meter IS NULL OR end_hour_meter >= start_hour_meter)
 );
-
-CREATE INDEX IF NOT EXISTS machine_usages_org_machine_created_idx
-  ON machine_usages(organization_id, machine_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS machine_usages_org_work_order_idx
-  ON machine_usages(organization_id, work_order_id) WHERE work_order_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS machine_usages_org_machine_created_idx ON machine_usages(organization_id, machine_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS machine_usages_org_work_order_idx ON machine_usages(organization_id, work_order_id) WHERE work_order_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS inventory_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -65,11 +61,8 @@ CREATE TABLE IF NOT EXISTS inventory_items (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS inventory_items_org_sku_uidx
-  ON inventory_items(organization_id, sku) WHERE sku IS NOT NULL;
-CREATE INDEX IF NOT EXISTS inventory_items_org_category_active_idx
-  ON inventory_items(organization_id, category, active);
+CREATE UNIQUE INDEX IF NOT EXISTS inventory_items_org_sku_uidx ON inventory_items(organization_id, sku) WHERE sku IS NOT NULL;
+CREATE INDEX IF NOT EXISTS inventory_items_org_category_active_idx ON inventory_items(organization_id, category, active);
 
 CREATE TABLE IF NOT EXISTS inventory_movements (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -87,72 +80,58 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
   occurred_at timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now()
 );
-
-CREATE INDEX IF NOT EXISTS inventory_movements_org_item_occurred_idx
-  ON inventory_movements(organization_id, inventory_item_id, occurred_at DESC);
-CREATE INDEX IF NOT EXISTS inventory_movements_org_work_order_idx
-  ON inventory_movements(organization_id, work_order_id) WHERE work_order_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS inventory_movements_org_item_occurred_idx ON inventory_movements(organization_id, inventory_item_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS inventory_movements_org_work_order_idx ON inventory_movements(organization_id, work_order_id) WHERE work_order_id IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION gc360_apply_inventory_movement()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_current numeric(16,4);
-  v_old_cost numeric(16,4);
-  v_new_qty numeric(16,4);
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE v_current numeric(16,4); v_old_cost numeric(16,4); v_new_qty numeric(16,4);
 BEGIN
-  SELECT current_quantity, average_unit_cost
-    INTO v_current, v_old_cost
+  SELECT current_quantity, average_unit_cost INTO v_current, v_old_cost
   FROM inventory_items
-  WHERE id = NEW.inventory_item_id
-    AND organization_id = NEW.organization_id
-    AND active = true
+  WHERE id=NEW.inventory_item_id AND organization_id=NEW.organization_id AND active=true
   FOR UPDATE;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'inventory_item_not_found';
-  END IF;
-
+  IF NOT FOUND THEN RAISE EXCEPTION 'inventory_item_not_found'; END IF;
   IF NEW.movement_type IN ('out','adjustment_out') THEN
-    IF v_current < NEW.quantity THEN
-      RAISE EXCEPTION 'insufficient_inventory';
-    END IF;
-    UPDATE inventory_items
-      SET current_quantity = current_quantity - NEW.quantity,
-          updated_at = now()
-      WHERE id = NEW.inventory_item_id;
+    IF v_current < NEW.quantity THEN RAISE EXCEPTION 'insufficient_inventory'; END IF;
+    UPDATE inventory_items SET current_quantity=current_quantity-NEW.quantity,updated_at=now() WHERE id=NEW.inventory_item_id;
   ELSE
-    v_new_qty := v_current + NEW.quantity;
-    UPDATE inventory_items
-      SET current_quantity = v_new_qty,
-          average_unit_cost = CASE
-            WHEN NEW.unit_cost IS NOT NULL AND v_new_qty > 0
-              THEN ROUND(((v_current * v_old_cost) + (NEW.quantity * NEW.unit_cost)) / v_new_qty, 4)
-            ELSE average_unit_cost
-          END,
-          updated_at = now()
-      WHERE id = NEW.inventory_item_id;
+    v_new_qty:=v_current+NEW.quantity;
+    UPDATE inventory_items SET current_quantity=v_new_qty,
+      average_unit_cost=CASE WHEN NEW.unit_cost IS NOT NULL AND v_new_qty>0 THEN ROUND(((v_current*v_old_cost)+(NEW.quantity*NEW.unit_cost))/v_new_qty,4) ELSE average_unit_cost END,
+      updated_at=now() WHERE id=NEW.inventory_item_id;
   END IF;
-
   RETURN NEW;
-END;
-$$;
+END; $$;
 
 DROP TRIGGER IF EXISTS trg_gc360_inventory_movement ON inventory_movements;
-CREATE TRIGGER trg_gc360_inventory_movement
-BEFORE INSERT ON inventory_movements
-FOR EACH ROW EXECUTE FUNCTION gc360_apply_inventory_movement();
+CREATE TRIGGER trg_gc360_inventory_movement BEFORE INSERT ON inventory_movements FOR EACH ROW EXECUTE FUNCTION gc360_apply_inventory_movement();
 
 ALTER TABLE work_orders
   ADD COLUMN IF NOT EXISTS machine_id uuid REFERENCES machines(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS inventory_item_id uuid REFERENCES inventory_items(id) ON DELETE SET NULL;
-
 ALTER TABLE cost_entries
   ADD COLUMN IF NOT EXISTS machine_usage_id uuid REFERENCES machine_usages(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS inventory_movement_id uuid REFERENCES inventory_movements(id) ON DELETE SET NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS cost_entries_machine_usage_uidx ON cost_entries(machine_usage_id) WHERE machine_usage_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS cost_entries_inventory_movement_uidx ON cost_entries(inventory_movement_id) WHERE inventory_movement_id IS NOT NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS cost_entries_machine_usage_uidx
-  ON cost_entries(machine_usage_id) WHERE machine_usage_id IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS cost_entries_inventory_movement_uidx
-  ON cost_entries(inventory_movement_id) WHERE inventory_movement_id IS NOT NULL;
+CREATE OR REPLACE FUNCTION gc360_post_inventory_cost()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE v_name text; v_unit text; v_avg numeric(16,4); v_effective numeric(16,4);
+BEGIN
+  IF NEW.movement_type='out' AND NEW.season_id IS NOT NULL THEN
+    SELECT name,unit,average_unit_cost INTO v_name,v_unit,v_avg FROM inventory_items WHERE id=NEW.inventory_item_id;
+    v_effective:=COALESCE(NEW.unit_cost,v_avg,0);
+    IF v_effective>0 THEN
+      INSERT INTO cost_entries(organization_id,field_id,season_id,work_order_id,inventory_movement_id,category,occurred_on,amount,quantity,unit,supplier,notes)
+      VALUES(NEW.organization_id,NEW.field_id,NEW.season_id,NEW.work_order_id,NEW.id,'Insumos - '||v_name,(NEW.occurred_at AT TIME ZONE 'America/Sao_Paulo')::date,ROUND(NEW.quantity*v_effective,2),NEW.quantity,v_unit,NEW.supplier,'Saída de estoque '||v_name)
+      ON CONFLICT(inventory_movement_id) WHERE inventory_movement_id IS NOT NULL
+      DO UPDATE SET amount=EXCLUDED.amount,quantity=EXCLUDED.quantity,supplier=EXCLUDED.supplier,notes=EXCLUDED.notes;
+    END IF;
+  END IF;
+  RETURN NEW;
+END; $$;
+
+DROP TRIGGER IF EXISTS trg_gc360_inventory_cost ON inventory_movements;
+CREATE TRIGGER trg_gc360_inventory_cost AFTER INSERT ON inventory_movements FOR EACH ROW EXECUTE FUNCTION gc360_post_inventory_cost();
